@@ -107,15 +107,14 @@ local function parseOsuFile(path)
     
     for i, line in ipairs(file) do
         if line ~= "" then
-            local category = string.match(line, "%[(.+)%][%s+?]")
+            local key, value = string.match(line, "(.+)%:[%s]?([^%c]+)")
+            local category = string.match(line, "%[(.+)%]")
             
-            if category then
+            if category and not key and not value then
                 ret[category] = {}
                 lastCategory = category
             else
                 if lastCategory ~= "Events" and lastCategory ~= "TimingPoints" and lastCategory ~= "HitObjects" then
-                    local key, value = string.match(line, "(.+)%:[%s]?([^%c]+)")
-                    
                     if key and value then
                         ret[lastCategory][key] = value
                     end
@@ -161,7 +160,7 @@ local function addFolder(path)
             local success, mapData = pcall(parseOsuFile, file)
 
             if not success then
-                warn(mapData)
+                table.remove(songs, table.find(songs, file))
             else
                 local hitObjects = {}
             
@@ -181,10 +180,11 @@ local function addFolder(path)
                 end
                 
                 hitObjects = HttpService:JSONEncode(hitObjects)
-    
+
                 local toAdd = {
-                    AudioFilename = mapData.Metadata.Title .. " [" .. (mapData.Metadata.Version or "Normal") .. "]",
-                    AudioArtist = mapData.Metadata.Artist,
+                    AudioFilename = (mapData.Metadata.Title or "Unknown Title") .. " [" .. (mapData.Metadata.Version or "Normal") .. "]",
+                    AudioArtist = mapData.Metadata.Artist or "Unknown Artist",
+                    AudioMapper = mapData.Metadata.Creator,
                     AudioDifficulty = 0,
                     AudioMod = 0,
                     AudioMD5Hash = syn.crypt.custom.hash("md5", hitObjects),
@@ -207,7 +207,7 @@ local function addFolder(path)
                 end
         
                 local mapDataFolder = Instance.new("Folder")
-                mapDataFolder.Name = mapData.Metadata.Title
+                mapDataFolder.Name = mapData.Metadata.Title or "Unknown"
         
                 for i, split in ipairs(splits) do
                     local mapDataValueObject = Instance.new("StringValue")
