@@ -106,7 +106,7 @@ local function parseOsuFile(path)
     local ret = {}
     
     for i, line in ipairs(file) do
-        if line ~= "" then
+        if line ~= "" and not string.find(line, "^//") then
             local key, value = string.match(line, "(.+)%:[%s]?([^%c]+)")
             local category = string.match(line, "%[(.+)%]")
             
@@ -142,6 +142,16 @@ local function parseOsuFile(path)
                         HitSound = tonumber(hitObject[5]),
                         EndTime = tonumber(string.split(hitObject[6], ":")[1])
                     })
+                elseif lastCategory == "Events" then
+                    local event = string.split(line, ",")
+
+                    table.insert(ret[lastCategory], {
+                        Type = tonumber(event[1]),
+                        Time = tonumber(event[2]),
+                        Filename = event[3] and string.sub(event[3], 2, -2) or nil,
+                        XOffset = tonumber(event[4]),
+                        YOffset = tonumber(event[5])
+                    })
                 end
             end
         end
@@ -160,6 +170,8 @@ local function addFolder(path)
             local success, mapData = pcall(parseOsuFile, file)
 
             if not success then
+                warn(mapData)
+
                 table.remove(songs, table.find(songs, file))
             else
                 local hitObjects = {}
@@ -181,6 +193,14 @@ local function addFolder(path)
                 
                 hitObjects = HttpService:JSONEncode(hitObjects)
 
+                local filename
+
+                for _, event in ipairs(mapData.Events) do
+                    if event.Type == 0 then
+                        filename = event.Filename
+                    end
+                end
+
                 local toAdd = {
                     AudioFilename = (mapData.Metadata.Title or "Unknown Title") .. " [" .. (mapData.Metadata.Version or "Normal") .. "]",
                     AudioArtist = mapData.Metadata.Artist or "Unknown Artist",
@@ -195,6 +215,10 @@ local function addFolder(path)
                     AudioAssetId = getsynasset(path .. "/" .. mapData.General.AudioFilename),
                     SongKey = #SongMetadata + 1
                 }
+
+                if filename then
+                    toAdd.AudioCoverImageAssetId = getsynasset(path .. "/" .. filename)
+                end
                 
                 local MAX_CHARACTERS_PER_OBJ = 2e5 - 1
                 
