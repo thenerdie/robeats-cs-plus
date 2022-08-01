@@ -10,6 +10,28 @@ local AudioManager = require(game.ReplicatedStorage.RobeatsGameCore.AudioManager
 
 local UI = loadstring(game:HttpGet("https://pastebin.com/raw/eKwyeQa0", true))()
 
+if not isfolder("robeatscs") then
+    makefolder("robeatscs")
+    makefolder("robeatscs/songs")
+    writefile("robeatscs/_difficultycache.json", "{}")
+end
+
+if not isfolder("robeatscs/songs") then
+    makefolder("robeatscs/songs")
+end
+
+if not isfile("robeatscs/_difficultycache.json") then
+    writefile("robeatscs/_difficultycache.json", "{}")
+end
+
+local success, rcsDifficulties = pcall(function()
+    return HttpService:JSONDecode(readfile("robeatscs/_difficultycache.json"))
+end)
+
+if not success then
+    rcsDifficulties = {}
+end
+
 local tab = UI:CreateTab("RoBeats CS+")
 
 -- local oldConstructor = ScoreManager.new
@@ -95,6 +117,36 @@ local tab = UI:CreateTab("RoBeats CS+")
 -- sound.Parent = game.SoundService
 
 -- sound:Play()
+
+local function refreshDifficultyCache()
+    local success, currentCache = pcall(function()
+        return HttpService:JSONDecode(readfile("robeatscs/_difficultycache.json"))
+    end)
+
+    if success then
+        rcsDifficulties = currentCache
+    end
+end
+
+local function saveDifficultyCache()
+    print(HttpService:JSONEncode(rcsDifficulties))
+
+    writefile("robeatscs/_difficultycache.json", HttpService:JSONEncode(rcsDifficulties))
+end
+
+local function msdToRcs(msd)
+    return msd * 1.8
+end
+
+local function serializeHitObjects(hitObjects)
+    local out = ""
+
+    for _, hitObject in ipairs(hitObjects) do
+        out = out .. hitObject.Time .. hitObject.Type .. (hitObject.Duration or "")
+    end
+
+    return out
+end
 
 local songs = {}
 
@@ -191,23 +243,62 @@ local function addFolder(path)
                     hitObjects[i] = obj
                 end
                 
-                hitObjects = HttpService:JSONEncode(hitObjects)
-
                 local filename
-
+                
                 for _, event in ipairs(mapData.Events) do
                     if event.Type == 0 then
                         filename = event.Filename
                     end
                 end
 
+                local md5Hash = syn.crypt.custom.hash("md5", serializeHitObjects(hitObjects))
+
+                local success, difficulties = pcall(function()
+                    if rcsDifficulties[md5Hash] then
+                        return rcsDifficulties[md5Hash]
+                    else
+                        local msdDifficulties = syn.request({
+                            Url = "http://localhost:3000/api/difficulties",
+                            Method = "POST",
+                            Body = HttpService:JSONEncode({
+                                HitObjects = hitObjects
+                            }),
+                            Headers = {
+                                ["Content-Type"] = "application/json"
+                            },
+                        })
+
+                        local body = HttpService:JSONDecode(msdDifficulties.Body)
+
+                        local difficulties = {}
+
+                        for _, difficulty in ipairs(body) do
+                            table.insert(difficulties, {
+                                Overall = msdToRcs(difficulty.overall),
+                                Chordjack = msdToRcs(difficulty.chordjack),
+                                Handstream = msdToRcs(difficulty.handstream),
+                                Jack = msdToRcs(difficulty.jack),
+                                Jumpstream = msdToRcs(difficulty.jumpstream),
+                                Stamina = msdToRcs(difficulty.stamina),
+                                Stream = msdToRcs(difficulty.stream),
+                                Technical = msdToRcs(difficulty.technical),
+                                Rate = difficulty.rate,
+                            })
+                        end
+
+                        rcsDifficulties[md5Hash] = difficulties
+                        
+                        return difficulties
+                    end
+                end)
+
                 local toAdd = {
                     AudioFilename = (mapData.Metadata.Title or "Unknown Title") .. " [" .. (mapData.Metadata.Version or "Normal") .. "]",
                     AudioArtist = mapData.Metadata.Artist or "Unknown Artist",
                     AudioMapper = mapData.Metadata.Creator,
-                    AudioDifficulty = 0,
+                    AudioDifficulty = success and difficulties or 0,
                     AudioMod = 0,
-                    AudioMD5Hash = syn.crypt.custom.hash("md5", hitObjects),
+                    Audiomd5Hash = md5Hash,
                     AudioVolume = 0.5,
                     AudioTimeOffset = -70,
                     AudioHitSFXGroup = 0,
@@ -215,21 +306,23 @@ local function addFolder(path)
                     AudioAssetId = getsynasset(path .. "/" .. mapData.General.AudioFilename),
                     SongKey = #SongMetadata + 1
                 }
-
+                
                 if filename then
                     toAdd.AudioCoverImageAssetId = getsynasset(path .. "/" .. filename)
                 end
+
+                hitObjects = HttpService:JSONEncode(hitObjects)
                 
                 local MAX_CHARACTERS_PER_OBJ = 2e5 - 1
                 
                 local numberOfSplits = math.ceil(#hitObjects / MAX_CHARACTERS_PER_OBJ)
-            
+                
                 local splits = {}
-        
+                
                 for i = 1, numberOfSplits do
                     splits[i] = string.sub(hitObjects, MAX_CHARACTERS_PER_OBJ*(i-1)+1, math.clamp(MAX_CHARACTERS_PER_OBJ*i, 0, #hitObjects))
                 end
-        
+                
                 local mapDataFolder = Instance.new("Folder")
                 mapDataFolder.Name = mapData.Metadata.Title or "Unknown"
         
@@ -252,9 +345,13 @@ local function addFolder(path)
 end
 
 local function addAllFolders()
+    refreshDifficultyCache()
+
     for _, folder in ipairs(listfiles("robeatscs/songs")) do
         addFolder(folder)
     end
+
+    saveDifficultyCache()
 end
 
 UI:MakeButton(tab, "Refresh Songs", addAllFolders)
