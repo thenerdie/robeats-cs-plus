@@ -1,4 +1,5 @@
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
 local SongMetadata = require(workspace.Songs.SongMetadata)
 
@@ -13,19 +14,21 @@ local UI = loadstring(game:HttpGet("https://pastebin.com/raw/eKwyeQa0", true))()
 if not isfolder("robeatscs") then
     makefolder("robeatscs")
     makefolder("robeatscs/songs")
-    writefile("robeatscs/_difficultycache.json", "{}")
+    writefile("robeatscs/_difficultycache.txt", "{}")
 end
 
 if not isfolder("robeatscs/songs") then
     makefolder("robeatscs/songs")
 end
 
-if not isfile("robeatscs/_difficultycache.json") then
-    writefile("robeatscs/_difficultycache.json", "{}")
+if not isfile("robeatscs/_difficultycache.txt") then
+    writefile("robeatscs/_difficultycache.txt", "")
 end
 
 local success, rcsDifficulties = pcall(function()
-    return HttpService:JSONDecode(readfile("robeatscs/_difficultycache.json"))
+    local data = syn.crypt.decrypt(readfile("robeatscs/_difficultycache.txt"), tostring(game.Players.LocalPlayer.UserId))
+
+    return HttpService:JSONDecode(data)
 end)
 
 if not success then
@@ -33,6 +36,8 @@ if not success then
 end
 
 local tab = UI:CreateTab("RoBeats CS+")
+
+local info
 
 -- local oldConstructor = ScoreManager.new
 
@@ -120,7 +125,9 @@ local tab = UI:CreateTab("RoBeats CS+")
 
 local function refreshDifficultyCache()
     local success, currentCache = pcall(function()
-        return HttpService:JSONDecode(readfile("robeatscs/_difficultycache.json"))
+        local data = syn.crypt.decrypt(readfile("robeatscs/_difficultycache.txt"), tostring(game.Players.LocalPlayer.UserId))
+
+        return HttpService:JSONDecode(data)
     end)
 
     if success then
@@ -129,9 +136,7 @@ local function refreshDifficultyCache()
 end
 
 local function saveDifficultyCache()
-    print(HttpService:JSONEncode(rcsDifficulties))
-
-    writefile("robeatscs/_difficultycache.json", HttpService:JSONEncode(rcsDifficulties))
+    writefile("robeatscs/_difficultycache.txt", syn.crypt.encrypt(HttpService:JSONEncode(rcsDifficulties), tostring(game.Players.LocalPlayer.UserId)))
 end
 
 local function msdToRcs(msd)
@@ -228,19 +233,32 @@ local function addFolder(path)
             else
                 local hitObjects = {}
             
+                local skip = false
+
                 for i, hitObject in ipairs(mapData.HitObjects) do
                     local obj = {
                         Time = hitObject.Time,
                         Track = math.floor(hitObject.X * 4 / 512) + 1,
                         Type = 1
                     }
+
+                    if obj.Track > 4 or not hitObject.EndTime then
+                        skip = true
+                        break
+                    end
                     
-                    if hitObject.EndTime ~= 0 then
-                        obj.Duration = hitObject.EndTime - hitObject.Time
+                    local duration = hitObject.EndTime - hitObject.Time
+
+                    if hitObject.EndTime ~= 0 and duration > 0 then
+                        obj.Duration = duration
                         obj.Type = 2
                     end
                     
                     hitObjects[i] = obj
+                end
+
+                if skip then
+                    continue
                 end
                 
                 local filename
@@ -304,7 +322,8 @@ local function addFolder(path)
                     AudioHitSFXGroup = 0,
                     AudioNotePrebufferTime = 1000,
                     AudioAssetId = getsynasset(path .. "/" .. mapData.General.AudioFilename),
-                    SongKey = #SongMetadata + 1
+                    SongKey = #SongMetadata + 1,
+                    AudioCustom = true,
                 }
                 
                 if filename then
@@ -341,19 +360,31 @@ local function addFolder(path)
                 table.insert(SongMetadata, toAdd)
             end
         end
+
+        RunService.Heartbeat:Wait()
     end
 end
 
 local function addAllFolders()
     refreshDifficultyCache()
 
-    for _, folder in ipairs(listfiles("robeatscs/songs")) do
+    local folders = listfiles("robeatscs/songs")
+
+    for i, folder in ipairs(folders) do
+        info.Text = string.format("Loading %d/%d", i, #folders)
+
         addFolder(folder)
     end
+
+    info.Text = "Ready!"
 
     saveDifficultyCache()
 end
 
 UI:MakeButton(tab, "Refresh Songs", addAllFolders)
+info = UI:MakeLabel(tab, "Refreshing songs...")
+
+info.TextScaled = true
+info.TextXAlignment = Enum.TextXAlignment.Left
 
 addAllFolders()
