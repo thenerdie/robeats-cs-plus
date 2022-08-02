@@ -25,8 +25,48 @@ if not isfile("robeatscs/_difficultycache.txt") then
     writefile("robeatscs/_difficultycache.txt", "")
 end
 
+local function decrypt(...)
+    if syn then
+        return syn.crypt.decrypt(...)
+    end
+
+    return base64_decode(...)
+end
+
+local function encrypt(...)
+    if syn then
+        return syn.crypt.encrypt(...)
+    end
+
+    return base64_encode(...)
+end
+
+local function md5hash(input)
+    if syn then
+        return syn.crypt.custom.hash("md5", input)
+    end
+
+    return crypt_hash(input, "")
+end
+
+local function httpRequest(options)
+    if syn then
+        return syn.request(options)
+    end
+
+    return request(options)
+end
+
+local function getAsset(url)
+    if syn then
+        return getsynasset(url)
+    end
+
+    return getcustomasset(url)
+end
+
 local success, rcsDifficulties = pcall(function()
-    local data = syn.crypt.decrypt(readfile("robeatscs/_difficultycache.txt"), tostring(game.Players.LocalPlayer.UserId))
+    local data = decrypt(readfile("robeatscs/_difficultycache.txt"), tostring(game.Players.LocalPlayer.UserId))
 
     return HttpService:JSONDecode(data)
 end)
@@ -125,7 +165,7 @@ local info
 
 local function refreshDifficultyCache()
     local success, currentCache = pcall(function()
-        local data = syn.crypt.decrypt(readfile("robeatscs/_difficultycache.txt"), tostring(game.Players.LocalPlayer.UserId))
+        local data = decrypt(readfile("robeatscs/_difficultycache.txt"), tostring(game.Players.LocalPlayer.UserId))
 
         return HttpService:JSONDecode(data)
     end)
@@ -136,7 +176,7 @@ local function refreshDifficultyCache()
 end
 
 local function saveDifficultyCache()
-    writefile("robeatscs/_difficultycache.txt", syn.crypt.encrypt(HttpService:JSONEncode(rcsDifficulties), tostring(game.Players.LocalPlayer.UserId)))
+    writefile("robeatscs/_difficultycache.txt", encrypt(HttpService:JSONEncode(rcsDifficulties), tostring(game.Players.LocalPlayer.UserId)))
 end
 
 local function msdToRcs(msd)
@@ -269,13 +309,13 @@ local function addFolder(path)
                     end
                 end
 
-                local md5Hash = syn.crypt.custom.hash("md5", serializeHitObjects(hitObjects))
+                local md5Hash = md5hash(serializeHitObjects(hitObjects))
 
                 local success, difficulties = pcall(function()
                     if rcsDifficulties[md5Hash] then
                         return rcsDifficulties[md5Hash]
                     else
-                        local msdDifficulties = syn.request({
+                        local msdDifficulties = httpRequest({
                             Url = "http://161.35.49.68/api/difficulties",
                             Method = "POST",
                             Body = HttpService:JSONEncode({
@@ -321,13 +361,13 @@ local function addFolder(path)
                     AudioTimeOffset = -70,
                     AudioHitSFXGroup = 0,
                     AudioNotePrebufferTime = 1000,
-                    AudioAssetId = getsynasset(path .. "/" .. mapData.General.AudioFilename),
+                    AudioAssetId = getAsset(path .. "/" .. mapData.General.AudioFilename),
                     SongKey = #SongMetadata + 1,
                     AudioCustom = true,
                 }
                 
                 if filename then
-                    toAdd.AudioCoverImageAssetId = getsynasset(path .. "/" .. filename)
+                    toAdd.AudioCoverImageAssetId = getAsset(path .. "/" .. filename)
                 end
 
                 hitObjects = HttpService:JSONEncode(hitObjects)
