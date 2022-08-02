@@ -276,7 +276,7 @@ local function addFolder(path)
                         return rcsDifficulties[md5Hash]
                     else
                         local msdDifficulties = syn.request({
-                            Url = "http://localhost:3000/api/difficulties",
+                            Url = "http://161.35.49.68/api/difficulties",
                             Method = "POST",
                             Body = HttpService:JSONEncode({
                                 HitObjects = hitObjects
@@ -292,15 +292,15 @@ local function addFolder(path)
 
                         for _, difficulty in ipairs(body) do
                             table.insert(difficulties, {
-                                Overall = msdToRcs(difficulty.overall),
-                                Chordjack = msdToRcs(difficulty.chordjack),
-                                Handstream = msdToRcs(difficulty.handstream),
-                                Jack = msdToRcs(difficulty.jack),
-                                Jumpstream = msdToRcs(difficulty.jumpstream),
-                                Stamina = msdToRcs(difficulty.stamina),
-                                Stream = msdToRcs(difficulty.stream),
-                                Technical = msdToRcs(difficulty.technical),
-                                Rate = difficulty.rate,
+                                Overall = msdToRcs(difficulty.Overall),
+                                Chordjack = msdToRcs(difficulty.Chordjack),
+                                Handstream = msdToRcs(difficulty.Handstream),
+                                Jack = msdToRcs(difficulty.Jack),
+                                Jumpstream = msdToRcs(difficulty.Jumpstream),
+                                Stamina = msdToRcs(difficulty.Stamina),
+                                Stream = msdToRcs(difficulty.Stream),
+                                Technical = msdToRcs(difficulty.Technical),
+                                Rate = difficulty.Rate,
                             })
                         end
 
