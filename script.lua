@@ -316,7 +316,7 @@ local function addFolder(path)
                     AudioMapper = mapData.Metadata.Creator,
                     AudioDifficulty = success and difficulties or 0,
                     AudioMod = 0,
-                    Audiomd5Hash = md5Hash,
+                    AudioMD5Hash = md5Hash,
                     AudioVolume = 0.5,
                     AudioTimeOffset = -70,
                     AudioHitSFXGroup = 0,
