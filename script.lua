@@ -399,9 +399,9 @@ local function addFolder(path)
                 
                 table.insert(SongMetadata, toAdd)
             end
+            
+            RunService.Heartbeat:Wait()
         end
-
-        RunService.Heartbeat:Wait()
     end
 end
 
