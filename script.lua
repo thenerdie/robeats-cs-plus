@@ -259,6 +259,26 @@ local function parseOsuFile(path)
     return ret
 end
 
+local function getMockDifficulties()
+    local ret = {}
+
+    for i = 7, 20 do
+        table.insert(ret, {
+            Overall = 0,
+            Chordjack = 0,
+            Handstream = 0,
+            Jack = 0,
+            Jumpstream = 0,
+            Stamina = 0,
+            Stream = 0,
+            Technical = 0,
+            Rate = i * 10,
+        })
+    end
+
+    return ret
+end
+
 local function addFolder(path)
     local files = listfiles(path)
     
@@ -360,7 +380,7 @@ local function addFolder(path)
                     AudioFilename = (mapData.Metadata.Title or "Unknown Title") .. " [" .. (mapData.Metadata.Version or "Normal") .. "]",
                     AudioArtist = mapData.Metadata.Artist or "Unknown Artist",
                     AudioMapper = mapData.Metadata.Creator,
-                    AudioDifficulty = success and difficulties or 0,
+                    AudioDifficulty = success and difficulties or getMockDifficulties(),
                     AudioMod = 0,
                     AudioMD5Hash = md5Hash,
                     AudioVolume = 0.5,
