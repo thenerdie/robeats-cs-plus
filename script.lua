@@ -79,6 +79,8 @@ local tab = UI:CreateTab("RoBeats CS+")
 
 local info
 
+local waitFrame = true
+
 -- local oldConstructor = ScoreManager.new
 
 -- local client
@@ -275,6 +277,10 @@ local function addFolder(path)
             
                 local skip = false
 
+                if mapData.Difficulty.CircleSize ~= "4" or mapData.General.Mode ~= "3" then
+                    skip = true
+                end
+
                 for i, hitObject in ipairs(mapData.HitObjects) do
                     local obj = {
                         Time = hitObject.Time,
@@ -400,7 +406,9 @@ local function addFolder(path)
                 table.insert(SongMetadata, toAdd)
             end
             
-            RunService.Heartbeat:Wait()
+            if waitFrame then
+                RunService.Heartbeat:Wait()
+            end
         end
     end
 end
@@ -426,5 +434,9 @@ info = UI:MakeLabel(tab, "Refreshing songs...")
 
 info.TextScaled = true
 info.TextXAlignment = Enum.TextXAlignment.Left
+
+UI:MakeToggle(tab, "Defer Loading", waitFrame, function()
+    waitFrame = not waitFrame
+end)
 
 addAllFolders()
