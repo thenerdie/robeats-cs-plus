@@ -11,19 +11,9 @@ local AudioManager = require(game.ReplicatedStorage.RobeatsGameCore.AudioManager
 
 local UI = loadstring(game:HttpGet("https://pastebin.com/raw/eKwyeQa0", true))()
 
-if not isfolder("robeatscs") then
-    makefolder("robeatscs")
-    makefolder("robeatscs/songs")
-    writefile("robeatscs/_difficultycache.txt", "{}")
-end
-
-if not isfolder("robeatscs/songs") then
-    makefolder("robeatscs/songs")
-end
-
-if not isfile("robeatscs/_difficultycache.txt") then
-    writefile("robeatscs/_difficultycache.txt", "")
-end
+local rcsdir = "robeatscs"
+local songsdir = rcsdir .. "/songs"
+local cachedir = rcsdir .. "/_difficultycache.txt"
 
 local function decrypt(...)
     if syn then
@@ -65,14 +55,32 @@ local function getAsset(url)
     return getcustomasset(url)
 end
 
-local success, rcsDifficulties = pcall(function()
-    local data = decrypt(readfile("robeatscs/_difficultycache.txt"), tostring(game.Players.LocalPlayer.UserId))
+if not isfolder(rcsdir) then
+    makefolder(rcsdir)
+end
 
-    return HttpService:JSONDecode(data)
-end)
+if not isfolder(songsdir) then
+    makefolder(songsdir)
+end
 
-if not success then
-    rcsDifficulties = {}
+if not isfile(cachedir) then
+    writefile(cachedir, "")
+end
+
+local rcsDifficulties = {}
+
+local oldPrint = print
+
+local function print(...)
+    local args = {...}
+
+    local str = ""
+
+    for _, v in ipairs(args) do
+        str = str .. tostring(v) .. "\t"
+    end
+
+    oldPrint("[RCS+] " .. str)
 end
 
 local tab = UI:CreateTab("RoBeats CS+")
@@ -81,93 +89,11 @@ local info
 
 local waitFrame = true
 
--- local oldConstructor = ScoreManager.new
-
--- local client
-
--- local function connect()
---     return pcall(function()
---         client = syn.websocket.connect("ws://localhost:8080")
---     end)
--- end
-
--- connect()
-
--- local function send(o)
---     pcall(function()
---         client:Send(HttpService:JSONEncode(o))
---     end)
--- end
-
--- ScoreManager.new = function(...)
---     local sm = oldConstructor(...)
-    
---     local oldreg = sm.register_hit
-    
---     send({
---         type = "updateScore",
---         score = 0,
---         marvelous = 0,
---         perfect = 0,
---         great = 0,
---         good = 0,
---         bad = 0,
---         miss = 0,
---         maxCombo = 0
---     })
-    
---     sm.register_hit = function(self, ...)
---         local ret = oldreg(self, ...)
-        
---         local scoreData = debug.getupvalues(sm.get_end_records)
-        
---         send({
---             type = "updateScore",
---             score = scoreData[1],
---             marvelous = scoreData[2],
---             perfect = scoreData[3],
---             great = scoreData[4],
---             good = scoreData[5],
---             bad = scoreData[6],
---             miss = scoreData[7],
---             maxCombo = scoreData[8],
---             accuracy = sm:get_accuracy(),
---             mean = sm:get_mean()
---         })
-       
---       return ret 
---     end
-    
---     return sm
--- end
-
--- local store = Knit.GetController("StateController").Store
-
--- local lastSongKey = store:getState().options.transient.SongKey
-
--- store.changed:connect(function(state)
---     local songKey = state.options.transient.SongKey
-    
---     if lastSongKey ~= songKey then
---         lastSongKey = songKey
-        
---         send({
---             type = "updateSong",
---             title = SongDatabase:get_artist_for_key(songKey),
---             artist = SongDatabase:get_title_for_key(songKey)
---         })
---     end
--- end)
-
--- local sound = Instance.new("Sound")
--- sound.SoundId = getsynasset("crescent/bgm_s2ep1.mp3")
--- sound.Parent = game.SoundService
-
--- sound:Play()
+local userId = game.Players.LocalPlayer.UserId
 
 local function refreshDifficultyCache()
     local success, currentCache = pcall(function()
-        local data = decrypt(readfile("robeatscs/_difficultycache.txt"), tostring(game.Players.LocalPlayer.UserId))
+        local data = decrypt(readfile(cachedir), tostring(userId))
 
         return HttpService:JSONDecode(data)
     end)
@@ -178,7 +104,7 @@ local function refreshDifficultyCache()
 end
 
 local function saveDifficultyCache()
-    writefile("robeatscs/_difficultycache.txt", encrypt(HttpService:JSONEncode(rcsDifficulties), tostring(game.Players.LocalPlayer.UserId)))
+    writefile(cachedir, encrypt(HttpService:JSONEncode(rcsDifficulties), tostring(userId)))
 end
 
 local function msdToRcs(msd)
@@ -195,8 +121,6 @@ local function serializeHitObjects(hitObjects)
     return out
 end
 
-local songs = {}
-
 local function parseOsuFile(path)
     local file = string.split(readfile(path), "\n")
     
@@ -204,7 +128,7 @@ local function parseOsuFile(path)
     
     local ret = {}
     
-    for i, line in ipairs(file) do
+    for _, line in ipairs(file) do
         if line ~= "" and not string.find(line, "^//") then
             local key, value = string.match(line, "(.+)%:[%s]?([^%c]+)")
             local category = string.match(line, "%[(.+)%]")
@@ -279,19 +203,72 @@ local function getMockDifficulties()
     return ret
 end
 
+local function getDifficultyForMap(hitObjects, md5Hash)
+    local difficulties = rcsDifficulties[md5Hash]
+
+    if difficulties and #difficulties >= 14 then
+        return difficulties
+    end
+
+    local success, difficulties = pcall(function()
+        local msdDifficulties = httpRequest({
+            Url = "http://161.35.49.68/api/difficulties",
+            Method = "POST",
+            Body = HttpService:JSONEncode({
+                HitObjects = hitObjects
+            }),
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+        })
+    
+        local body = HttpService:JSONDecode(msdDifficulties.Body)
+    
+        local difficulties = {}
+    
+        for _, difficulty in ipairs(body) do
+            table.insert(difficulties, {
+                Overall = msdToRcs(difficulty.Overall),
+                Chordjack = msdToRcs(difficulty.Chordjack),
+                Handstream = msdToRcs(difficulty.Handstream),
+                Jack = msdToRcs(difficulty.Jack),
+                Jumpstream = msdToRcs(difficulty.Jumpstream),
+                Stamina = msdToRcs(difficulty.Stamina),
+                Stream = msdToRcs(difficulty.Stream),
+                Technical = msdToRcs(difficulty.Technical),
+                Rate = difficulty.Rate,
+            })
+        end
+        
+        return difficulties
+    end)
+
+    local mapDifficulties
+
+    if success and difficulties and #difficulties >= 14 then
+        mapDifficulties = difficulties
+    else
+        mapDifficulties = getMockDifficulties()
+    end
+
+    return mapDifficulties
+end
+
+local found = {}
+
 local function addFolder(path)
     local files = listfiles(path)
     
     for _, file in ipairs(files) do
-        if string.find(file, ".osu") and not table.find(songs, file) then
-            table.insert(songs, file)
+        if string.find(file, "^(.+).osu$") and not table.find(found, file) then
+            table.insert(found, file)
 
             local success, mapData = pcall(parseOsuFile, file)
 
             if not success then
                 warn(mapData)
 
-                table.remove(songs, table.find(songs, file))
+                table.remove(found, table.find(found, file))
             else
                 local hitObjects = {}
             
@@ -324,6 +301,7 @@ local function addFolder(path)
                 end
 
                 if skip then
+                    print("Skipping " .. file .. "...")
                     continue
                 end
                 
@@ -337,50 +315,11 @@ local function addFolder(path)
 
                 local md5Hash = md5hash(serializeHitObjects(hitObjects))
 
-                local success, difficulties = pcall(function()
-                    if rcsDifficulties[md5Hash] then
-                        return rcsDifficulties[md5Hash]
-                    else
-                        local msdDifficulties = httpRequest({
-                            Url = "http://161.35.49.68/api/difficulties",
-                            Method = "POST",
-                            Body = HttpService:JSONEncode({
-                                HitObjects = hitObjects
-                            }),
-                            Headers = {
-                                ["Content-Type"] = "application/json"
-                            },
-                        })
-
-                        local body = HttpService:JSONDecode(msdDifficulties.Body)
-
-                        local difficulties = {}
-
-                        for _, difficulty in ipairs(body) do
-                            table.insert(difficulties, {
-                                Overall = msdToRcs(difficulty.Overall),
-                                Chordjack = msdToRcs(difficulty.Chordjack),
-                                Handstream = msdToRcs(difficulty.Handstream),
-                                Jack = msdToRcs(difficulty.Jack),
-                                Jumpstream = msdToRcs(difficulty.Jumpstream),
-                                Stamina = msdToRcs(difficulty.Stamina),
-                                Stream = msdToRcs(difficulty.Stream),
-                                Technical = msdToRcs(difficulty.Technical),
-                                Rate = difficulty.Rate,
-                            })
-                        end
-
-                        rcsDifficulties[md5Hash] = difficulties
-                        
-                        return difficulties
-                    end
-                end)
-
                 local toAdd = {
                     AudioFilename = (mapData.Metadata.Title or "Unknown Title") .. " [" .. (mapData.Metadata.Version or "Normal") .. "]",
                     AudioArtist = mapData.Metadata.Artist or "Unknown Artist",
                     AudioMapper = mapData.Metadata.Creator,
-                    AudioDifficulty = success and difficulties or getMockDifficulties(),
+                    AudioDifficulty = getDifficultyForMap(hitObjects, md5Hash),
                     AudioMod = 0,
                     AudioMD5Hash = md5Hash,
                     AudioVolume = 0.5,
@@ -424,6 +363,8 @@ local function addFolder(path)
                 mapDataFolder.Parent = workspace.Songs.SongMaps
                 
                 table.insert(SongMetadata, toAdd)
+
+                print("Added " .. file .. "!")
             end
             
             if waitFrame then
@@ -436,12 +377,16 @@ end
 local function addAllFolders()
     refreshDifficultyCache()
 
-    local folders = listfiles("robeatscs/songs")
+    local folders = listfiles(songsdir)
 
     for i, folder in ipairs(folders) do
         info.Text = string.format("Loading %d/%d", i, #folders)
 
         addFolder(folder)
+
+        if i % 25 == 0 then
+            saveDifficultyCache()
+        end
     end
 
     info.Text = "Ready!"
